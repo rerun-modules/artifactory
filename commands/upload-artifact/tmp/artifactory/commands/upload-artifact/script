@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+
+# To implement this command, edit the "Command implementation" section below. 
+
+# Usage
+# -----
+
+# Comments prefixed with `#/` are managed by stubbs.
+# The `command` and `usage` comments describe the command
+# and show its options.
+# 
+#/ command: artifactory:upload-artifact: "Upload an artifact to an Artifactory server"
+#/ usage: rerun artifactory:upload-artifact [ --repo-url <http://artifactory.dev4.rms.com:8081/artifactory>]  --repo-id <>  --group-id <>  --artifact-id <>  --artifact-version <>  --artifact-format <>  --artifact-file <>  --repo-username <>  --repo-password <> 
+
+# Load common functions
+# ---------------------
+
+# Load the function library for this module.
+# This loads rerun functions, too.
+. $RERUN_MODULE_DIR/lib/functions.sh upload-artifact || { 
+  echo >&2 "Failed loading function library." ; exit 1 ; 
+}
+
+# Error handling
+# ---------------
+
+# This script is designed to _fail-fast_.
+
+# Trap errors and exit. The call to `rerun_die` will print the
+# the error message and exit with the error command exit status. 
+
+trap 'rerun_die $? "*** command failed: artifactory:upload-artifact. ***"' ERR
+
+# Run [set] `nounset` to treat unset variables as errors. Set [pipefail]
+# so a pipeline return status is the value of the last 
+# (rightmost) command to exit with non-zero status.
+#
+# [set]: http://ss64.com/bash/set.html
+# [pipefail]: http://www.gnu.org/software/bash/manual/html_node/Pipelines.html
+
+set -o nounset -o pipefail
+
+# Command variables
+# -----------------
+
+# This command script can access the following variables
+# declared by `rerun` or by the option parser function.
+
+#/ rerun-variables: RERUN, RERUN_VERSION, RERUN_MODULES, RERUN_MODULE_DIR
+#/ option-variables: REPO_URL REPO_ID GROUP_ID ARTIFACT_ID ARTIFACT_VERSION ARTIFACT_FORMAT ARTIFACT_FILE REPO_USERNAME REPO_PASSWORD
+
+# The `rerun_options_parse` function processes the command line
+# arguments. Each accepted command line flag results in setting 
+# one the corresponding option variables.
+
+rerun_options_parse "$@"
+
+
+# Command implementation
+# ----------------------
+
+
+
+MAVEN_VERSION=3.0.4
+MVN="${RERUN_MODULE_DIR}/lib/apache-maven-${MAVEN_VERSION}/bin/mvn"
+
+#REPO_USERNAME=admin
+#REPO_PASSWORD=password
+
+#REPO_URL="http://artifactory.dev4.rms.com:8081/artifactory"
+#REPO_ID=third-party
+#GROUP_ID=com.rms
+#ARTIFACT_ID=rerun-modules-mongodb
+#ARTIFACT_VERSION=6.6.6-6
+#ARTIFACT_FORMAT=RPM
+#ARTIFACT_FILE="/tmp/rerun-modules-mongodb-6.6.6-6.noarch.rpm"
+
+
+#needs a settings.xml file
+
+generateSettingsXml() {
+
+   settingsXml=$(mktemp)
+
+   cat > "${settingsXml}" <<!
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd" xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+  <localRepository>${localrepo_tmpdir}</localRepository>
+
+  <profiles>
+    <profile>
+      <repositories>
+        <repository>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+          <id>${REPO_ID}</id>
+          <name>${REPO_ID}</name>
+          <url>${REPO_URL}/${REPO_ID}</url>
+        </repository>
+      </repositories>
+      <id>artifactory</id>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>artifactory</activeProfile>
+  </activeProfiles>
+
+  <servers>
+     <server>
+        <id>${REPO_ID}</id>
+        <username>${REPO_USERNAME}</username>
+        <password>${REPO_PASSWORD}</password>
+     </server>
+  </servers>
+</settings>
+!
+
+   echo "${settingsXml}"
+}
+
+localrepo_tmpdir="$(mktemp -d)"
+settingsXml="$(generateSettingsXml)"
+
+"${MVN}" -q -s "${settingsXml}" deploy:deploy-file \
+    -Durl="${REPO_URL}/${REPO_ID}" \
+    -DrepositoryId="${REPO_ID}" \
+    -DgroupId="${GROUP_ID}" \
+    -DartifactId="${ARTIFACT_ID}" \
+    -Dversion="${ARTIFACT_VERSION}"  \
+    -Dpackaging="${ARTIFACT_FORMAT}" \
+    -Dfile="${ARTIFACT_FILE}"
+
+
+rm -f "${settingsXml}"
+rm -rf "${localrepo_tmpdir}"
+
+# Done. Exit with last command exit status.
+exit $?
+
+#You can change where Maven creates the repository. Open the settings.xml in your $M2_HOME/conf directory and change the localRepository 
